@@ -10,5 +10,8 @@
   },
   "scripts": {
     "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@red-cup-engineering/npm-registry-services-section": "workspace:*"
   }
 }
