@@ -13,5 +13,8 @@
   },
   "dependencies": {
     "@red-cup-engineering/npm-registry-services-section": "workspace:*"
+  },
+  "devDependencies": {
+    "@red-cup-engineering/npm-registry-read-service": "workspace:*"
   }
 }
