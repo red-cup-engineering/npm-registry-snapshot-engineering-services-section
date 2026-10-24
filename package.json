@@ -17,11 +17,11 @@
     "check": "check-package-syntax"
   },
   "dependencies": {
-    "@red-cup-engineering/npm-registry-services-section": "0.1.1",
+    "@red-cup-engineering/npm-registry-engineering-services-section": "0.1.1",
     "@red-cup-engineering/npm-registry-read-service": "0.1.2"
   },
   "devDependencies": {
-    "@red-cup-engineering/jsnode-package-services-section": "0.2.4"
+    "@red-cup-engineering/jsnode-package-engineering-services-section": "0.2.4"
   },
   "license": "MIT",
   "funding": {
