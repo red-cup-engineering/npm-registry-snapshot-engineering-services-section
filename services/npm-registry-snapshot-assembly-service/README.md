@@ -25,3 +25,16 @@ baseRegistryDirectory, excludedBaseReleases, compute })` returns the
 receipt only after `npm-registry-snapshot-verification-service` admits the
 completed directory. Each release is
 `{ manifest, artifactPath, integrity: "sha512-..." }`.
+
+Package identities follow [SemVer 2.0.0](https://semver.org/), including
+canonical development prereleases (for example `0.4.3-dev.0`) and build
+metadata. Ranges, prefixes, leading zeros, and coerced spellings are refused.
+The snapshot's generated `latest` tag selects its greatest admitted SemVer
+precedence, including prereleases. Build metadata does not affect SemVer
+precedence; equal-precedence identities use ASCII lexical order as a
+reproducible tie-breaker. Assembly, base exclusions and independent verification
+share the same version rules through npm's `semver` implementation.
+
+The native end-to-end test uses Node >=24 and npm 11, creates actual tarballs,
+serves an isolated snapshot, generates two equal locks and performs `npm ci`
+for a transitive prerelease dependency. It does not publish to a registry.

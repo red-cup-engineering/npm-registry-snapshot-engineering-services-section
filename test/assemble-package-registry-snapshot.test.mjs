@@ -97,3 +97,32 @@ test("refuses an output territory that is already occupied", async () => {
     await assert.rejects(() => assemblePackageRegistrySnapshot({ releases: [], outputDirectory: output, registryUrl: "http://127.0.0.1:4873/" }), /territory must be empty/u);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("assembles, verifies, and excludes exact development prereleases with deterministic precedence", async () => {
+  const root = await mkdtemp(join(tmpdir(), "npm-snapshot-prerelease-"));
+  try {
+    const versions = ["0.4.3-dev.10", "0.4.3-dev.2", "0.4.3-dev.0", "0.4.3+build.2", "0.4.3", "0.4.3+build.1"];
+    const releases = await Promise.all(versions.map(v => release(root, "@customer/example", v)));
+    const base = join(root, "base");
+    const receipt = await assemblePackageRegistrySnapshot({ releases, outputDirectory: base, registryUrl: "http://127.0.0.1:4873/" });
+    assert.deepEqual(receipt.packages.map(p => p.version), ["0.4.3-dev.0", "0.4.3-dev.2", "0.4.3-dev.10", "0.4.3", "0.4.3+build.1", "0.4.3+build.2"]);
+    const metadata = JSON.parse(await readFile(join(base, "metadata", "%40customer%2Fexample.json"), "utf8"));
+    assert.equal(metadata["dist-tags"].latest, "0.4.3+build.2");
+    const next = await assemblePackageRegistrySnapshot({ releases: [], outputDirectory: join(root,"next"), baseRegistryDirectory: base, excludedBaseReleases: ["@customer/example@0.4.3-dev.2", "@customer/example@0.4.3+build.2"], registryUrl: "http://127.0.0.1:4873/" });
+    assert.equal(next.packages.some(p => p.version === "0.4.3-dev.2"), false);
+    assert.equal(JSON.parse(await readFile(join(root,"next","metadata","%40customer%2Fexample.json"), "utf8"))["dist-tags"].latest, "0.4.3+build.1");
+  } finally { await rm(root, { recursive:true,force:true }); }
+});
+
+test("malformed prerelease refuses before artifact writes and verifier independently rejects it", async () => {
+  const { verifyPackageRegistrySnapshot } = await import("../scripts/verify-package-registry-snapshot.mjs");
+  const root = await mkdtemp(join(tmpdir(), "npm-snapshot-invalid-version-"));
+  try {
+    const item = await release(root, "plain", "1.0.0");
+    await assert.rejects(() => assemblePackageRegistrySnapshot({ releases:[{...item,manifest:{name:"plain",version:"1.0.0-dev.01"}}],outputDirectory:join(root,"invalid"),registryUrl:"http://127.0.0.1:4873/" }), /version is not exact/);
+    assert.deepEqual(await readdir(join(root,"invalid")), []);
+    await assemblePackageRegistrySnapshot({ releases:[item],outputDirectory:join(root,"valid"),registryUrl:"http://127.0.0.1:4873/" });
+    const path=join(root,"valid","registry-receipt.json");const receipt=JSON.parse(await readFile(path,"utf8"));receipt.packages[0].version="1.0.0-dev.01";await writeFile(path,JSON.stringify(receipt));
+    await assert.rejects(() => verifyPackageRegistrySnapshot({registryDirectory:join(root,"valid")}), error => error.defects.some(d => d.code === "RECEIPT_PACKAGE_VERSION"));
+  } finally { await rm(root,{recursive:true,force:true}); }
+});

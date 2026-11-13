@@ -1,10 +1,10 @@
+import { isExactVersion, versionOrder } from "./package-version.mjs";
 import { access, cp, mkdir, mkdtemp, readFile, readdir, rename, rm, copyFile, writeFile, lstat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { measureArtifactFile } from "@red-cup-engineering/npm-registry-engineering-services-section/npm-artifact-integrity-service";
 import { verifyPackageRegistrySnapshot } from "@red-cup-engineering/npm-registry-snapshot-engineering-services-section/verify-package-registry-snapshot";
 
 const PACKAGE_NAME = /^(?:@[a-z0-9-]+\/)?[a-z0-9][a-z0-9._-]*$/u;
-const VERSION = /^\d+\.\d+\.\d+$/u;
 const SHA512_INTEGRITY = /^sha512-[A-Za-z0-9+/]+={0,2}$/u;
 const DEPENDENCY_FIELDS = ["dependencies", "optionalDependencies", "peerDependencies", "devDependencies"];
 
@@ -19,16 +19,12 @@ function artifactNames(name, version) {
   return `tarballs/${prefix}/-/${leaf}-${version}.tgz`;
 }
 
-function versionOrder(left, right) {
-  const a = left.split(".").map(Number), b = right.split(".").map(Number);
-  return a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
-}
 
 function releaseSelector(value) {
   if (typeof value !== "string") throw new TypeError("excluded base release must be an exact package@version selector");
   const boundary = value.lastIndexOf("@");
   const name = value.slice(0, boundary), version = value.slice(boundary + 1);
-  if (!PACKAGE_NAME.test(name) || !VERSION.test(version)) throw new TypeError("excluded base release must be an exact package@version selector");
+  if (!PACKAGE_NAME.test(name) || !isExactVersion(version)) throw new TypeError("excluded base release must be an exact package@version selector");
   return { name, version };
 }
 
@@ -37,7 +33,7 @@ async function suppliedRelease(value) {
   const manifest = value.manifest;
   if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) throw new TypeError("release manifest must be an object");
   if (!PACKAGE_NAME.test(manifest.name ?? "") || manifest.name.startsWith("@emsenn/")) throw new Error(`package identity is not sovereign: ${manifest.name ?? "unknown"}`);
-  if (!VERSION.test(manifest.version ?? "")) throw new Error(`package version is not exact: ${manifest.name}`);
+  if (!isExactVersion(manifest.version ?? "")) throw new Error(`package version is not exact: ${manifest.name}`);
   if (typeof value.artifactPath !== "string" || !value.artifactPath) throw new TypeError("release artifactPath must be a non-empty string");
   const artifactPath = resolve(value.artifactPath);
   let status;
