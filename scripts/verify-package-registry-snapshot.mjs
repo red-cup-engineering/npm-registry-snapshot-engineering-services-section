@@ -3,7 +3,7 @@ import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { verifyArtifactFile } from "@red-cup-engineering/npm-registry-engineering-services-section/npm-artifact-integrity-service";
 
-const PACKAGE_NAME = /^(?:@[a-z0-9-]+\/)?[a-z0-9][a-z0-9._-]*$/u;
+import { isNpmPackageName } from "@red-cup-engineering/npm-registry-read-service";
 const LOCAL_PROTOCOL = /^(?:workspace:|file:|link:)/u;
 const DEPENDENCY_FIELDS = ["dependencies", "optionalDependencies", "peerDependencies", "devDependencies"];
 
@@ -32,7 +32,7 @@ function metadataNameFromCanonicalPath(file) {
   if (!file.endsWith(".json") || file.includes("/")) return null;
   try {
     const name = decodeURIComponent(file.slice(0, -".json".length));
-    return PACKAGE_NAME.test(name) && file === `${encodeURIComponent(name)}.json` ? name : null;
+    return isNpmPackageName(name) && file === `${encodeURIComponent(name)}.json` ? name : null;
   } catch { return null; }
 }
 
@@ -154,9 +154,9 @@ export async function verifyPackageRegistrySnapshot({ registryDirectory }) {
     const name = entry?.name;
     const version = entry?.version;
     const identity = `${name}@${version}`;
-    if (!PACKAGE_NAME.test(name ?? "")) defect(defects, "RECEIPT_PACKAGE_NAME", { identity, actual: name ?? null });
+    if (!isNpmPackageName(name ?? "")) defect(defects, "RECEIPT_PACKAGE_NAME", { identity, actual: name ?? null });
     if (!isExactVersion(version ?? "")) defect(defects, "RECEIPT_PACKAGE_VERSION", { identity, actual: version ?? null });
-    if (!PACKAGE_NAME.test(name ?? "") || !isExactVersion(version ?? "")) continue;
+    if (!isNpmPackageName(name ?? "") || !isExactVersion(version ?? "")) continue;
     if (receiptReleases.has(identity)) defect(defects, "DUPLICATE_RECEIPT_RELEASE", { identity });
     receiptReleases.set(identity, entry);
     const artifact = canonicalArtifact(name, version);
@@ -218,7 +218,7 @@ export async function verifyPackageRegistrySnapshot({ registryDirectory }) {
       continue;
     }
     const name = metadata?.name;
-    if (!PACKAGE_NAME.test(name ?? "") || file !== `${encodeURIComponent(name)}.json`) {
+    if (!isNpmPackageName(name ?? "") || file !== `${encodeURIComponent(name)}.json`) {
       defect(defects, "METADATA_PACKAGE_IDENTITY", { file, actual: name ?? null });
       continue;
     }
