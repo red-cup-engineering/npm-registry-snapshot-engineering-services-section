@@ -1,4 +1,4 @@
-# npm-registry-snapshot-services-section
+# npm-registry-snapshot-engineering-services-section
 
 <!-- 561-group-standards:badges:start -->
 [![Red Cup Engineering](https://img.shields.io/badge/561%20Group-Red%20Cup%20Engineering-c0392b)](https://github.com/red-cup-engineering)
