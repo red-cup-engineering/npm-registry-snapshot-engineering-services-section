@@ -126,3 +126,24 @@ test("malformed prerelease refuses before artifact writes and verifier independe
     await assert.rejects(() => verifyPackageRegistrySnapshot({registryDirectory:join(root,"valid")}), error => error.defects.some(d => d.code === "RECEIPT_PACKAGE_VERSION"));
   } finally { await rm(root,{recursive:true,force:true}); }
 });
+
+test("assembles and verifies standard npm scopes including cbor2's dotted-scope dependency", async () => {
+  const root = await mkdtemp(join(tmpdir(), "npm-snapshot-scope-"));
+  try {
+    const names = ["@cto.af/wtf8", "@scope_name/package.name"];
+    const receipt = await assemblePackageRegistrySnapshot({
+      releases: await Promise.all(names.map(name => release(root, name, "1.0.0"))),
+      outputDirectory: join(root, "registry"), registryUrl: "http://127.0.0.1:4873/",
+    });
+    assert.deepEqual(receipt.packages.map(record => record.name).sort(), names.sort());
+    assert.deepEqual(receipt.scopes, ["cto.af", "scope_name"]);
+    const metadata = JSON.parse(await readFile(join(root, "registry/metadata/%40cto.af%2Fwtf8.json"), "utf8"));
+    assert.equal(metadata.versions["1.0.0"].dist.tarball, "http://127.0.0.1:4873/tarballs/cto.af/wtf8/-/wtf8-1.0.0.tgz");
+    for (const name of ["@scope/../escape", "@scope/package/extra", "@scope/space name", "@scope/UPPER"]) {
+      await assert.rejects(assemblePackageRegistrySnapshot({
+        releases: [{ ...(await release(root, "invalid", "1.0.0")), manifest: { name, version: "1.0.0" } }],
+        outputDirectory: join(root, "invalid"), registryUrl: "http://127.0.0.1:4873/",
+      }), /package identity/u);
+    }
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
