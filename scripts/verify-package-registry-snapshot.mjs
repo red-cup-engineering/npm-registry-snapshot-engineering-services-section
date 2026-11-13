@@ -1,6 +1,6 @@
 import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
-import { verifyArtifactFile } from "@red-cup-engineering/npm-registry-services-section/npm-artifact-integrity-service";
+import { verifyArtifactFile } from "@red-cup-engineering/npm-registry-engineering-services-section/npm-artifact-integrity-service";
 
 const PACKAGE_NAME = /^(?:@[a-z0-9-]+\/)?[a-z0-9][a-z0-9._-]*$/u;
 const VERSION = /^\d+\.\d+\.\d+$/u;

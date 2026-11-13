@@ -1,7 +1,7 @@
 import { access, cp, mkdir, mkdtemp, readFile, readdir, rename, rm, copyFile, writeFile, lstat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { measureArtifactFile } from "@red-cup-engineering/npm-registry-services-section/npm-artifact-integrity-service";
-import { verifyPackageRegistrySnapshot } from "@red-cup-engineering/npm-registry-snapshot-services-section/verify-package-registry-snapshot";
+import { measureArtifactFile } from "@red-cup-engineering/npm-registry-engineering-services-section/npm-artifact-integrity-service";
+import { verifyPackageRegistrySnapshot } from "@red-cup-engineering/npm-registry-snapshot-engineering-services-section/verify-package-registry-snapshot";
 
 const PACKAGE_NAME = /^(?:@[a-z0-9-]+\/)?[a-z0-9][a-z0-9._-]*$/u;
 const VERSION = /^\d+\.\d+\.\d+$/u;
