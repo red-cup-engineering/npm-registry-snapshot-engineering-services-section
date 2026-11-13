@@ -209,12 +209,12 @@ test("rejects noncanonical metadata paths before attempting to parse them", asyn
   await withSnapshot(async (root) => {
     const item = release({ name: "@example/widget", version: "1.0.0", bytes: Buffer.from("layout") });
     await writeSnapshot(root, [item]);
-    await writeFile(join(root, "metadata", "Not-a-packument.json"), "this is not JSON");
+    await writeFile(join(root, "metadata", "not a packument.json"), "this is not JSON");
     await assert.rejects(
       () => verifyPackageRegistrySnapshot({ registryDirectory: root }),
       (error) => error instanceof PackageRegistrySnapshotVerificationError
-        && error.defects.some(({ code, file }) => code === "METADATA_FILE_LAYOUT" && file === "Not-a-packument.json")
-        && !error.defects.some(({ code, file }) => code === "METADATA_JSON" && file === "Not-a-packument.json"),
+        && error.defects.some(({ code, file }) => code === "METADATA_FILE_LAYOUT" && file === "not a packument.json")
+        && !error.defects.some(({ code, file }) => code === "METADATA_JSON" && file === "not a packument.json"),
     );
   });
 });
