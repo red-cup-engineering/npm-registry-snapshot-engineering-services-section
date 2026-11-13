@@ -1,9 +1,9 @@
+import { isExactVersion, versionOrder } from "./package-version.mjs";
 import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { verifyArtifactFile } from "@red-cup-engineering/npm-registry-engineering-services-section/npm-artifact-integrity-service";
 
 const PACKAGE_NAME = /^(?:@[a-z0-9-]+\/)?[a-z0-9][a-z0-9._-]*$/u;
-const VERSION = /^\d+\.\d+\.\d+$/u;
 const LOCAL_PROTOCOL = /^(?:workspace:|file:|link:)/u;
 const DEPENDENCY_FIELDS = ["dependencies", "optionalDependencies", "peerDependencies", "devDependencies"];
 
@@ -107,11 +107,6 @@ function exactUrl(value) {
   } catch { return null; }
 }
 
-function versionOrder(left, right) {
-  const a = left.split(".").map(Number);
-  const b = right.split(".").map(Number);
-  return a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
-}
 
 function rejectLocalProtocols(defects, name, version, manifest) {
   for (const field of DEPENDENCY_FIELDS) {
@@ -160,8 +155,8 @@ export async function verifyPackageRegistrySnapshot({ registryDirectory }) {
     const version = entry?.version;
     const identity = `${name}@${version}`;
     if (!PACKAGE_NAME.test(name ?? "")) defect(defects, "RECEIPT_PACKAGE_NAME", { identity, actual: name ?? null });
-    if (!VERSION.test(version ?? "")) defect(defects, "RECEIPT_PACKAGE_VERSION", { identity, actual: version ?? null });
-    if (!PACKAGE_NAME.test(name ?? "") || !VERSION.test(version ?? "")) continue;
+    if (!isExactVersion(version ?? "")) defect(defects, "RECEIPT_PACKAGE_VERSION", { identity, actual: version ?? null });
+    if (!PACKAGE_NAME.test(name ?? "") || !isExactVersion(version ?? "")) continue;
     if (receiptReleases.has(identity)) defect(defects, "DUPLICATE_RECEIPT_RELEASE", { identity });
     receiptReleases.set(identity, entry);
     const artifact = canonicalArtifact(name, version);
@@ -233,15 +228,15 @@ export async function verifyPackageRegistrySnapshot({ registryDirectory }) {
       defect(defects, "METADATA_VERSIONS", { name });
       continue;
     }
-    const availableVersions = Object.keys(metadata.versions).filter((version) => VERSION.test(version));
+    const availableVersions = Object.keys(metadata.versions).filter((version) => isExactVersion(version));
     const expectedLatest = availableVersions.sort(versionOrder).at(-1) ?? null;
     const latest = metadata["dist-tags"]?.latest;
-    if (typeof latest !== "string" || !VERSION.test(latest) || !Object.hasOwn(metadata.versions, latest) || latest !== expectedLatest) {
+    if (typeof latest !== "string" || !isExactVersion(latest) || !Object.hasOwn(metadata.versions, latest) || latest !== expectedLatest) {
       defect(defects, "METADATA_DIST_TAG_LATEST", { name, expected: expectedLatest, actual: latest ?? null });
     }
     for (const [version, manifest] of Object.entries(metadata.versions)) {
       const identity = `${name}@${version}`;
-      if (!VERSION.test(version) || manifest?.name !== name || manifest?.version !== version) {
+      if (!isExactVersion(version) || manifest?.name !== name || manifest?.version !== version) {
         defect(defects, "METADATA_RELEASE_IDENTITY", { identity });
         continue;
       }

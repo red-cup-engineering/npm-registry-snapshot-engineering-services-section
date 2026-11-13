@@ -23,13 +23,13 @@ async function npmTarball(root, manifest) {
 }
 
 test("snapshot and read owners drive two deterministic npm 11 locks and a no-upstream npm ci", async (t) => {
-  if (process.version !== "v24.19.0") return t.skip("owner proof is pinned to Node v24.19.0");
+  assert.ok(Number(process.versions.node.split(".")[0]) >= 24, "native integration requires Node >=24");
   const npmVersion = (await run("npm", ["--version"])).stdout.trim();
-  if (npmVersion !== "11.17.0") return t.skip("owner proof is pinned to npm 11.17.0");
+  assert.equal(Number(npmVersion.split(".")[0]), 11, "native integration requires npm 11");
   const root = await mkdtemp("/tmp/npm-snapshot-offline-");
   try {
-    const plain = await npmTarball(root, { name: "plain-provider", version: "2.0.0", type: "module", exports: "./index.mjs" });
-    const scoped = await npmTarball(root, { name: "@customer/provider", version: "1.0.0", type: "module", exports: "./index.mjs", dependencies: { "plain-provider": "2.0.0" } });
+    const plain = await npmTarball(root, { name: "plain-provider", version: "2.0.0-dev.0", type: "module", exports: "./index.mjs" });
+    const scoped = await npmTarball(root, { name: "@customer/provider", version: "1.0.0-dev.0", type: "module", exports: "./index.mjs", dependencies: { "plain-provider": "2.0.0-dev.0" } });
     const registryDirectory = join(root, "registry");
     await assemblePackageRegistrySnapshot({ releases: [scoped, plain], outputDirectory: registryDirectory, registryUrl: "http://127.0.0.1:4873/" });
     const server = createPackageRegistryServer({ registryDirectory });
@@ -39,7 +39,7 @@ test("snapshot and read owners drive two deterministic npm 11 locks and a no-ups
       const registry = `http://127.0.0.1:${port}/`;
       const consumer = join(root, "consumer");
       await mkdir(consumer);
-      await writeFile(join(consumer, "package.json"), `${JSON.stringify({ name: "consumer", version: "1.0.0", private: true, dependencies: { "@customer/provider": "1.0.0" } })}\n`);
+      await writeFile(join(consumer, "package.json"), `${JSON.stringify({ name: "consumer", version: "1.0.0-dev.0", private: true, dependencies: { "@customer/provider": "1.0.0-dev.0" } })}\n`);
       const config = join(root, "client.npmrc");
       await writeFile(config, `registry=${registry}\n@customer:registry=${registry}\naudit=false\nfund=false\n`);
       const environment = { PATH: process.env.PATH, HOME: root, NPM_CONFIG_USERCONFIG: config, NPM_CONFIG_GLOBALCONFIG: join(root, "empty-global.npmrc"), NPM_CONFIG_CACHE: join(root, "cache"), TMPDIR: "/tmp", TEMP: "/tmp", TMP: "/tmp" };
@@ -52,8 +52,8 @@ test("snapshot and read owners drive two deterministic npm 11 locks and a no-ups
       const second = await readFile(join(consumer, "package-lock.json"));
       assert.deepEqual(second, first);
       await run("npm", ["ci", "--ignore-scripts", "--no-audit", "--no-fund", `--registry=${registry}`, `--@customer:registry=${registry}`], { cwd: consumer, env: environment });
-      assert.equal(JSON.parse(await readFile(join(consumer, "node_modules/@customer/provider/package.json"), "utf8")).version, "1.0.0");
-      assert.equal(JSON.parse(await readFile(join(consumer, "node_modules/plain-provider/package.json"), "utf8")).version, "2.0.0");
+      assert.equal(JSON.parse(await readFile(join(consumer, "node_modules/@customer/provider/package.json"), "utf8")).version, "1.0.0-dev.0");
+      assert.equal(JSON.parse(await readFile(join(consumer, "node_modules/plain-provider/package.json"), "utf8")).version, "2.0.0-dev.0");
     } finally { await closeServer(server); }
   } finally { await rm(root, { recursive: true, force: true }); }
 });
