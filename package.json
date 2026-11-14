@@ -1,6 +1,6 @@
 {
   "name": "@red-cup-engineering/npm-registry-snapshot-engineering-services-section",
-  "version": "0.1.4-dev.1",
+  "version": "0.1.4-dev.2",
   "type": "module",
   "description": "Holds the registry snapshot services: assembly, verification, and activation of immutable registry snapshots. Use when producing or promoting a registry snapshot.",
   "repository": {
@@ -17,16 +17,29 @@
     "check": "check-package-syntax"
   },
   "dependencies": {
-    "@red-cup-engineering/npm-registry-engineering-services-section": "0.1.2",
-    "@red-cup-engineering/npm-registry-read-service": "^0.1.5-dev.0",
+    "@red-cup-engineering/npm-registry-engineering-services-section": "0.1.3-dev.0",
+    "@red-cup-engineering/npm-registry-read-service": "0.1.5-dev.1",
     "semver": "7.7.2"
   },
   "devDependencies": {
-    "@red-cup-engineering/jsnode-package-engineering-services-section": "0.2.4"
+    "@red-cup-engineering/jsnode-package-engineering-services-section": "0.6.1-dev.6"
   },
   "license": "MIT",
   "funding": {
     "type": "individual",
     "url": "https://github.com/561-group/.github/blob/main/TIPS.md"
-  }
+  },
+  "files": [
+    "scripts",
+    "README.md",
+    "LICENSE",
+    "test"
+  ],
+  "receivingTests": [
+    "test/activate-verified-package-registry-snapshot.test.mjs",
+    "test/assemble-package-registry-snapshot.test.mjs",
+    "test/npm11-offline-install.test.mjs",
+    "test/package-version.test.mjs",
+    "test/verify-package-registry-snapshot.test.mjs"
+  ]
 }

@@ -8,3 +8,13 @@
 <!-- 561-group-standards:badges:end -->
 
 Holds the registry snapshot services: assembly, verification, and activation of immutable registry snapshots. Use when producing or promoting a registry snapshot.
+
+## Native source-artifact receiving prerequisite
+
+This development selection uses the genuine current registry integrity owner and
+read service. Assembly, verification and activation algorithms are unchanged.
+The five original portable suites are shipped and enrolled, including the
+loopback-only npm 11 lock/clean-install integration; receiving needs Node 24+,
+npm 11 and tar. Tests activate only disposable fixture snapshots, not a live
+registry. Exact source/archive receiving does not grant activation authority,
+assert issued-registry availability or qualify the repository development graph.
