@@ -4,13 +4,15 @@ import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { npmPackageFixture } from "./support/npm-package-fixture.mjs";
 import { assemblePackageRegistrySnapshot } from "../scripts/assemble-package-registry-snapshot.mjs";
 
 async function release(root, name, version, manifest = {}) {
   const artifactPath = join(root, `${name.slice(name.indexOf("/") + 1)}-${version}.tgz`);
-  const bytes = Buffer.from(`artifact ${name}@${version}\n`);
+  const suppliedManifest = { name, version, ...manifest };
+  const bytes = npmPackageFixture(suppliedManifest);
   await writeFile(artifactPath, bytes);
-  return { artifactPath, integrity: `sha512-${createHash("sha512").update(bytes).digest("base64")}`, manifest: { name, version, ...manifest } };
+  return { artifactPath, integrity: `sha512-${createHash("sha512").update(bytes).digest("base64")}`, manifest: suppliedManifest };
 }
 
 test("assembles canonical metadata, receipt, client configuration, and deterministic latest tags", async () => {
@@ -60,7 +62,7 @@ test("refuses missing and symbolic-link artifact inputs before snapshot assembly
     const manifest = { name: "@customer/example", version: "1.0.0" };
     await assert.rejects(() => assemblePackageRegistrySnapshot({ releases: [{ manifest, artifactPath: join(root, "missing.tgz") }], outputDirectory: join(root, "missing"), registryUrl: "http://127.0.0.1:4873/" }), /existing regular file/u);
     const target = join(root, "target.tgz"), link = join(root, "link.tgz");
-    await writeFile(target, "artifact\n");
+    await writeFile(target, npmPackageFixture(manifest));
     await symlink(target, link);
     await assert.rejects(() => assemblePackageRegistrySnapshot({ releases: [{ manifest, artifactPath: link }], outputDirectory: join(root, "link"), registryUrl: "http://127.0.0.1:4873/" }), /non-symbolic-link/u);
   } finally { await rm(root, { recursive: true, force: true }); }
