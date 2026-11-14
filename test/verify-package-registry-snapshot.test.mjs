@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { npmPackageFixture } from "./support/npm-package-fixture.mjs";
 
 import {
   PackageRegistrySnapshotVerificationError,
@@ -12,7 +13,9 @@ import {
 
 const REGISTRY = "https://registry.example.test/catalog/";
 
-function release({ name, version, bytes, dependencies }) {
+function release({ name, version, payload, dependencies }) {
+  const manifest = { name, version, ...(dependencies ? { dependencies } : {}) };
+  const bytes = npmPackageFixture(manifest, payload);
   const scoped = name.startsWith("@");
   const [scope, scopedLeaf] = scoped ? name.slice(1).split("/") : [null, name];
   const artifact = `tarballs/${scoped ? `${scope}/` : ""}${scopedLeaf}/-/${scopedLeaf}-${version}.tgz`;
@@ -21,7 +24,7 @@ function release({ name, version, bytes, dependencies }) {
   return {
     artifact,
     entry: { name, version, artifact, tarball: new URL(artifact, REGISTRY).href, bytes: bytes.byteLength, shasum, integrity },
-    manifest: { name, version, ...(dependencies ? { dependencies } : {}), dist: { tarball: new URL(artifact, REGISTRY).href, shasum, integrity } },
+    manifest: { ...manifest, dist: { tarball: new URL(artifact, REGISTRY).href, shasum, integrity } },
     bytes,
   };
 }
@@ -55,9 +58,9 @@ async function withSnapshot(callback) {
 
 test("verifies a complete canonical receipt, metadata catalog, and tarball catalog", async () => {
   await withSnapshot(async (root) => {
-    const alpha = release({ name: "@alpha/example", version: "1.0.0", bytes: Buffer.from("alpha") });
-    const zeta = release({ name: "@zeta/example", version: "2.0.0", bytes: Buffer.from("zeta") });
-    const plain = release({ name: "plain", version: "3.0.0", bytes: Buffer.from("plain") });
+    const alpha = release({ name: "@alpha/example", version: "1.0.0", payload: "alpha" });
+    const zeta = release({ name: "@zeta/example", version: "2.0.0", payload: "zeta" });
+    const plain = release({ name: "plain", version: "3.0.0", payload: "plain" });
     await writeSnapshot(root, [zeta, plain, alpha]);
     const report = await verifyPackageRegistrySnapshot({ registryDirectory: root });
     assert.deepEqual(report, {
@@ -74,8 +77,8 @@ test("verifies a complete canonical receipt, metadata catalog, and tarball catal
 
 test("rejects an unreceipted empty packument and non-builder packument base fields", async () => {
   await withSnapshot(async (root) => {
-    const first = release({ name: "@example/widget", version: "1.0.0", bytes: Buffer.from("first") });
-    const second = release({ name: "@example/widget", version: "1.0.1", bytes: Buffer.from("second") });
+    const first = release({ name: "@example/widget", version: "1.0.0", payload: "first" });
+    const second = release({ name: "@example/widget", version: "1.0.1", payload: "second" });
     await writeSnapshot(root, [first, second]);
     const metadataPath = join(root, "metadata", "%40example%2Fwidget.json");
     const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
@@ -105,7 +108,7 @@ test("rejects an unreceipted empty packument and non-builder packument base fiel
 
 test("reports receipt digest, metadata identity, local protocol, and orphan tarball defects together", async () => {
   await withSnapshot(async (root) => {
-    const item = release({ name: "@example/widget", version: "1.0.0", bytes: Buffer.from("expected"), dependencies: { "@example/local": "workspace:*" } });
+    const item = release({ name: "@example/widget", version: "1.0.0", payload: "expected", dependencies: { "@example/local": "workspace:*" } });
     const receipt = await writeSnapshot(root, [item]);
     receipt.packages[0].shasum = "wrong";
     receipt.scopes = [];
@@ -132,8 +135,8 @@ test("reports receipt digest, metadata identity, local protocol, and orphan tarb
 
 test("rejects duplicate and unreceipted releases, receipt-only releases, and bad canonical paths", async () => {
   await withSnapshot(async (root) => {
-    const first = release({ name: "@example/widget", version: "1.0.0", bytes: Buffer.from("first") });
-    const second = release({ name: "@example/widget", version: "1.0.1", bytes: Buffer.from("second") });
+    const first = release({ name: "@example/widget", version: "1.0.0", payload: "first" });
+    const second = release({ name: "@example/widget", version: "1.0.1", payload: "second" });
     const receipt = await writeSnapshot(root, [first, second]);
     receipt.packages.push({ ...first.entry });
     receipt.packages[1].artifact = "../outside.tgz";
@@ -161,7 +164,7 @@ test("rejects duplicate and unreceipted releases, receipt-only releases, and bad
 test("refuses registry receipt symlinks whether their targets are inside or outside the registry root", async () => {
   for (const targetKind of ["internal", "external"]) {
     await withSnapshot(async (root) => {
-      const item = release({ name: "@example/widget", version: "1.0.0", bytes: Buffer.from("receipt") });
+      const item = release({ name: "@example/widget", version: "1.0.0", payload: "receipt" });
       await writeSnapshot(root, [item]);
       const targetDirectory = targetKind === "internal" ? root : await mkdtemp(join(tmpdir(), "npm-registry-snapshot-receipt-target-"));
       try {
@@ -184,7 +187,7 @@ test("refuses registry receipt symlinks whether their targets are inside or outs
 test("refuses canonical metadata symlinks whether their targets are inside or outside the registry root", async () => {
   for (const targetKind of ["internal", "external"]) {
     await withSnapshot(async (root) => {
-      const item = release({ name: "@example/widget", version: "1.0.0", bytes: Buffer.from("metadata") });
+      const item = release({ name: "@example/widget", version: "1.0.0", payload: "metadata" });
       await writeSnapshot(root, [item]);
       const targetDirectory = targetKind === "internal" ? root : await mkdtemp(join(tmpdir(), "npm-registry-snapshot-metadata-target-"));
       try {
@@ -207,7 +210,7 @@ test("refuses canonical metadata symlinks whether their targets are inside or ou
 
 test("rejects noncanonical metadata paths before attempting to parse them", async () => {
   await withSnapshot(async (root) => {
-    const item = release({ name: "@example/widget", version: "1.0.0", bytes: Buffer.from("layout") });
+    const item = release({ name: "@example/widget", version: "1.0.0", payload: "layout" });
     await writeSnapshot(root, [item]);
     await writeFile(join(root, "metadata", "not a packument.json"), "this is not JSON");
     await assert.rejects(
