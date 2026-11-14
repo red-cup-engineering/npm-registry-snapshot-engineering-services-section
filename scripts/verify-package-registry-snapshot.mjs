@@ -1,7 +1,8 @@
 import { isExactVersion, versionOrder } from "./package-version.mjs";
 import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
-import { verifyArtifactFile } from "@red-cup-engineering/npm-registry-engineering-services-section/npm-artifact-integrity-service";
+import { admitNpmPackageArchive } from "@red-cup-engineering/npm-registry-engineering-services-section/admit-npm-package-archive";
+import { verifyArtifactBytes } from "@red-cup-engineering/npm-registry-engineering-services-section/npm-artifact-integrity-service";
 
 import { isNpmPackageName } from "@red-cup-engineering/npm-registry-read-service";
 const LOCAL_PROTOCOL = /^(?:workspace:|file:|link:)/u;
@@ -76,11 +77,11 @@ async function inspectRegularFileUnderRoot(rootReal, path) {
   return { state: "regular", stat, realpath: fileReal };
 }
 
-async function readRegularFileUnderRoot(rootReal, path) {
+async function readRegularFileUnderRoot(rootReal, path, encoding = "utf8") {
   const before = await inspectRegularFileUnderRoot(rootReal, path);
   if (before.state !== "regular") return before;
   let contents;
-  try { contents = await readFile(path, "utf8"); } catch (error) {
+  try { contents = await readFile(path, encoding); } catch (error) {
     if (error?.code === "ENOENT") return { state: "missing" };
     throw error;
   }
@@ -150,6 +151,7 @@ export async function verifyPackageRegistrySnapshot({ registryDirectory }) {
   const entries = Array.isArray(receipt?.packages) ? receipt.packages : [];
   const receiptReleases = new Map();
   const expectedArtifacts = new Set();
+  const receiptedArchives = [];
   for (const entry of entries) {
     const name = entry?.name;
     const version = entry?.version;
@@ -167,24 +169,7 @@ export async function verifyPackageRegistrySnapshot({ registryDirectory }) {
       defect(defects, "ARTIFACT_OUTSIDE_ROOT", { identity, artifact: entry.artifact ?? null });
       continue;
     }
-    try {
-      const artifactReal = await realpath(artifactPath);
-      const stat = await lstat(artifactPath);
-      if (!inside(rootReal, artifactReal) || !stat.isFile()) defect(defects, "ARTIFACT_NOT_REGULAR_UNDER_ROOT", { identity, artifact: entry.artifact ?? null });
-      else {
-        const verification = await verifyArtifactFile(artifactPath, {
-          bytes: entry.bytes,
-          shasum: entry.shasum,
-          integrity: entry.integrity,
-        });
-        for (const field of verification.mismatches) {
-          defect(defects, "RECEIPT_ARTIFACT_DIGEST", { identity, field, expected: entry[field] ?? null, actual: verification.measurement[field] });
-        }
-      }
-    } catch (error) {
-      if (error?.code === "ENOENT") defect(defects, "ARTIFACT_MISSING", { identity, artifact: entry.artifact ?? null });
-      else throw error;
-    }
+    receiptedArchives.push({ identity, entry, artifactPath });
     const expectedTarball = registry ? new URL(artifact, registry).href : null;
     if (entry.tarball !== expectedTarball) defect(defects, "RECEIPT_TARBALL_URL", { identity, expected: expectedTarball, actual: entry.tarball ?? null });
   }
@@ -205,6 +190,7 @@ export async function verifyPackageRegistrySnapshot({ registryDirectory }) {
     if (!metadataNameFromCanonicalPath(file)) defect(defects, "METADATA_FILE_LAYOUT", { file });
   }
   const metadataReleases = new Set();
+  const archiveManifests = new Map();
   for (const file of metadataFiles) {
     if (!metadataNameFromCanonicalPath(file)) continue;
     let metadata;
@@ -251,7 +237,33 @@ export async function verifyPackageRegistrySnapshot({ registryDirectory }) {
         const expected = field === "tarball" ? expectedTarball : entry[field];
         if (manifest?.dist?.[field] !== expected) defect(defects, "METADATA_DIST_MISMATCH", { identity, field, expected: expected ?? null, actual: manifest?.dist?.[field] ?? null });
       }
+      const before = defects.length;
       rejectLocalProtocols(defects, name, version, manifest);
+      if (defects.length === before) archiveManifests.set(identity, manifest);
+    }
+  }
+  // Read one archive at a time after joining metadata to the receipt. Both
+  // digest and embedded-manifest admission use the same bytes, not a reread.
+  for (const { identity, entry, artifactPath } of receiptedArchives) {
+    const artifact = await readRegularFileUnderRoot(rootReal, artifactPath, null);
+    if (artifact.state !== "regular") {
+      defect(defects, artifact.state === "missing" ? "ARTIFACT_MISSING" : "ARTIFACT_NOT_REGULAR_UNDER_ROOT",
+        { identity, artifact: entry.artifact ?? null });
+      continue;
+    }
+    const verification = verifyArtifactBytes(artifact.contents, {
+      bytes: entry.bytes, shasum: entry.shasum, integrity: entry.integrity,
+    });
+    for (const field of verification.mismatches)
+      defect(defects, "RECEIPT_ARTIFACT_DIGEST", { identity, field, expected: entry[field] ?? null, actual: verification.measurement[field] });
+    const manifest = archiveManifests.get(identity);
+    if (verification.ok && manifest) {
+      try { admitNpmPackageArchive(artifact.contents, { manifest, integrity: entry.integrity }); }
+      catch (error) {
+        if (!["INVALID_NPM_ARCHIVE_MANIFEST", "NPM_ARCHIVE_BOUNDS", "NPM_ARCHIVE_INTEGRITY_MISMATCH",
+          "NPM_ARCHIVE_IDENTITY_MISMATCH", "NPM_ARCHIVE_DEPENDENCY_MISMATCH", "NPM_ARCHIVE_LOCAL_PROTOCOL"].includes(error?.code)) throw error;
+        defect(defects, "ARTIFACT_MANIFEST_REFUSED", { identity, reason: error.code });
+      }
     }
   }
   for (const identity of receiptReleases.keys()) {

@@ -149,3 +149,24 @@ test("assembles and verifies standard npm scopes including cbor2's dotted-scope 
     }
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("refuses matching digests for an invalid archive or a contradictory manifest before publishing snapshot files", async () => {
+  const root = await mkdtemp(join(tmpdir(), "npm-snapshot-archive-admission-"));
+  try {
+    const item = await release(root, "plain", "1.0.0", { dependencies: { helper: "1.2.3" } });
+    for (const [id, bytes, code] of [
+      ["plain-text", Buffer.from("not a package"), "INVALID_NPM_ARCHIVE_MANIFEST"],
+      ["identity", npmPackageFixture({ ...item.manifest, version: "2.0.0" }), "NPM_ARCHIVE_IDENTITY_MISMATCH"],
+      ["dependencies", npmPackageFixture({ ...item.manifest, dependencies: { helper: "2.0.0" } }), "NPM_ARCHIVE_DEPENDENCY_MISMATCH"],
+      ["archive-local", npmPackageFixture({ ...item.manifest, dependencies: { helper: "workspace:*" } }), "NPM_ARCHIVE_LOCAL_PROTOCOL"],
+    ]) {
+      await writeFile(item.artifactPath, bytes);
+      const integrity = "sha512-" + createHash("sha512").update(bytes).digest("base64");
+      const outputDirectory = join(root, id);
+      await assert.rejects(() => assemblePackageRegistrySnapshot({ releases: [{ ...item, integrity }], outputDirectory,
+        registryUrl: "https://fixture.invalid/" }), error =>
+        error.defects?.some(record => record.code === "ARTIFACT_MANIFEST_REFUSED" && record.reason === code));
+      assert.deepEqual(await readdir(outputDirectory), []);
+    }
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

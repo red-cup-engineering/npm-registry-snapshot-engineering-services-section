@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -13,9 +13,9 @@ import {
 
 const REGISTRY = "https://registry.example.test/catalog/";
 
-function release({ name, version, payload, dependencies }) {
+function release({ name, version, payload, dependencies, archiveManifest }) {
   const manifest = { name, version, ...(dependencies ? { dependencies } : {}) };
-  const bytes = npmPackageFixture(manifest, payload);
+  const bytes = npmPackageFixture(archiveManifest ?? manifest, payload);
   const scoped = name.startsWith("@");
   const [scope, scopedLeaf] = scoped ? name.slice(1).split("/") : [null, name];
   const artifact = `tarballs/${scoped ? `${scope}/` : ""}${scopedLeaf}/-/${scopedLeaf}-${version}.tgz`;
@@ -219,5 +219,27 @@ test("rejects noncanonical metadata paths before attempting to parse them", asyn
         && error.defects.some(({ code, file }) => code === "METADATA_FILE_LAYOUT" && file === "not a packument.json")
         && !error.defects.some(({ code, file }) => code === "METADATA_JSON" && file === "not a packument.json"),
     );
+  });
+});
+
+test("independent verification refuses an archive whose checked identity contradicts catalogue metadata", async () => {
+  await withSnapshot(async root => {
+    const name = "@example/widget", version = "1.0.0";
+    const item = release({ name, version, dependencies: { helper: "1.2.3" },
+      archiveManifest: { name, version, dependencies: { helper: "2.0.0" } } });
+    const baseRegistryDirectory = join(root, "base");
+    await writeSnapshot(baseRegistryDirectory, [item]);
+    await assert.rejects(() => verifyPackageRegistrySnapshot({ registryDirectory: baseRegistryDirectory }), error => {
+      assert.deepEqual(error.defects, [{ code: "ARTIFACT_MANIFEST_REFUSED",
+        identity: "@example/widget@1.0.0", reason: "NPM_ARCHIVE_DEPENDENCY_MISMATCH" }]);
+      return true;
+    });
+    // Base merges enter through the same final independent verification.
+    const { assemblePackageRegistrySnapshot } = await import("../scripts/assemble-package-registry-snapshot.mjs");
+    const outputDirectory = join(root, "output");
+    await assert.rejects(() => assemblePackageRegistrySnapshot({
+      releases: [], outputDirectory, registryUrl: REGISTRY, baseRegistryDirectory,
+    }), error => error.defects?.some(record => record.code === "ARTIFACT_MANIFEST_REFUSED"));
+    assert.deepEqual(await readdir(outputDirectory), []);
   });
 });
