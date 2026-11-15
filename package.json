@@ -32,12 +32,5 @@
     "scripts",
     "README.md",
     "LICENSE"
-  ],
-  "receivingTests": [
-    "test/activate-verified-package-registry-snapshot.test.mjs",
-    "test/assemble-package-registry-snapshot.test.mjs",
-    "test/npm11-offline-install.test.mjs",
-    "test/package-version.test.mjs",
-    "test/verify-package-registry-snapshot.test.mjs"
   ]
 }
