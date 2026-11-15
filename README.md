@@ -9,23 +9,18 @@
 
 Holds the registry snapshot services: assembly, verification, and activation of immutable registry snapshots. Use when producing or promoting a registry snapshot.
 
-## Native source-artifact receiving prerequisite
+## Receiving a frozen npm dependency graph
 
-This development selection uses the genuine current registry integrity owner and
-read service. Assembly, verification and activation algorithms are unchanged.
-The five original portable suites are shipped and enrolled, including the
-loopback-only npm 11 lock/clean-install integration; receiving needs Node 24+,
-npm 11 and tar. Tests activate only disposable fixture snapshots, not a live
-registry. Exact source/archive receiving does not grant activation authority,
-assert issued-registry availability or qualify the repository development graph.
+Run `npm test` with Node 24 and npm 11. The test creates two real npm archives
+offline, including a carrier that imports a transitive supplier. It verifies and
+selects a disposable snapshot, reads the exact archive bytes through the
+Registry Reader on loopback, and resolves an npm lockfile only against that
+listener. A fresh consumer runs `npm ci --ignore-scripts` with an empty cache.
+The lockfile must retain both exact versions, URLs and SHA-512 integrities; the
+Reader must actually receive a request for each archive. The installed entry
+point must then use its transitive supplier under Node.
 
-## Receiving a real npm archive
-
-`npm test` uses npm's offline, lifecycle-disabled packer to create a small
-source-owned fixture. It exercises the actual Snapshot assembler and verifier,
-then reads the selected snapshot through the Registry Reader on loopback,
-re-measures the archive bytes, and imports the received module in a clean
-Node consumer. If an independently staged candidate disagrees with the
-archive's platform declaration, verification refuses it and the selected
-snapshot remains available. The test does not contact an external registry,
-select a live snapshot, or certify the installed Registry supplier versions.
+Verification must refuse a staged catalogue whose platform declaration differs
+from its measured archive. The selected snapshot must remain available. The
+test does not acquire external packages, select a live snapshot, or certify
+that the Snapshot's installed Registry supplier versions have been issued.
