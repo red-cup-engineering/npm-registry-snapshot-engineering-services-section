@@ -13,8 +13,11 @@ Holds the registry snapshot services: assembly, verification, and activation of 
 
 This development selection uses the genuine current registry integrity owner and
 read service. Assembly, verification and activation algorithms are unchanged.
-The five original portable suites are shipped and enrolled, including the
-loopback-only npm 11 lock/clean-install integration; receiving needs Node 24+,
-npm 11 and tar. Tests activate only disposable fixture snapshots, not a live
-registry. Exact source/archive receiving does not grant activation authority,
-assert issued-registry availability or qualify the repository development graph.
+Source and installed receiving are separate. Run
+`node --test test/http-snapshot-receiving.test.mjs` to verify exact archive
+delivery and refusal continuity over HTTP on loopback alone; it does not run
+npm. The separately enrolled `test/npm11-offline-install.test.mjs` performs the
+cold fixture lock/install receiving check; it needs Node 24+, npm 11 and tar.
+Tests activate only disposable fixture snapshots, not a live registry.
+Source/archive receiving does not grant activation authority, assert issued
+registry availability or qualify the repository development graph.
