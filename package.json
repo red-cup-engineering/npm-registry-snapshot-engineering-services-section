@@ -13,7 +13,6 @@
     "./verify-package-registry-snapshot": "./scripts/verify-package-registry-snapshot.mjs"
   },
   "scripts": {
-    "test": "run-package-tests",
     "check": "check-package-syntax"
   },
   "dependencies": {
@@ -32,8 +31,7 @@
   "files": [
     "scripts",
     "README.md",
-    "LICENSE",
-    "test"
+    "LICENSE"
   ],
   "receivingTests": [
     "test/activate-verified-package-registry-snapshot.test.mjs",
