@@ -24,3 +24,28 @@ Verification must refuse a staged catalogue whose platform declaration differs
 from its measured archive. The selected snapshot must remain available. The
 test does not acquire external packages, select a live snapshot, or certify
 that the Snapshot's installed Registry supplier versions have been issued.
+
+
+## Receiving issuer publication times
+
+A supplied release may carry `publicationMetadata: { registry, packument }`,
+where `packument` is the caller's original issuer observation. Assembly requires
+its exact package name, version, SHA-512 integrity and `time[version]` to bind
+the same admitted archive. Only that per-version timestamp is projected into
+the snapshot catalogue. No time is manufactured from Git history, file
+modification, or the moment of assembly. The caller owns issuer authentication;
+offline assembly verifies the binding, not the logging-in or acquisition step.
+
+A merge retains an existing release's timestamp, refuses conflicting evidence,
+and removes time for an excluded release. Verification joins catalogue time
+to the release receipt before selection. A version with no issuer observation
+remains undated. When called with `requireCompletePublicationMetadataFor`,
+the Snapshot refuses absent packages or missing time for **any** offered
+version of the named packages, and retains that requirement on merges.
+Use this for the application's authored release-age scope: some pnpm versions
+can proceed with an incomplete time map rather than making a reliable age
+decision. Do not invent dates or add exceptions to make an install pass.
+
+Run `npm run test:publication-age` with native pnpm 11 available. It runs native
+lock generation and frozen receiving against the Snapshot's existing Reader on
+loopback; the dates in its synthetic packages are fixture data only.

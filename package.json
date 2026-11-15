@@ -14,7 +14,8 @@
   },
   "scripts": {
     "check": "check-package-syntax",
-    "test": "node --test test/packed-archive-receiving.test.mjs"
+    "test": "node --test test/packed-archive-receiving.test.mjs",
+    "test:publication-age": "node --test test/publication-age-receiving.test.mjs"
   },
   "dependencies": {
     "@red-cup-engineering/npm-registry-engineering-services-section": "^0.1.3",
@@ -33,7 +34,8 @@
     "scripts",
     "README.md",
     "LICENSE",
-    "test/packed-archive-receiving.test.mjs"
+    "test/packed-archive-receiving.test.mjs",
+    "test/publication-age-receiving.test.mjs"
   ],
   "receivingTests": [
     "test/packed-archive-receiving.test.mjs"

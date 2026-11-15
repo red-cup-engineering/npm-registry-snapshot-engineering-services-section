@@ -1,3 +1,4 @@
+import { validPublicationEvidence } from "./publication-metadata.mjs";
 import { isExactVersion, versionOrder } from "./package-version.mjs";
 import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
@@ -160,6 +161,8 @@ export async function verifyPackageRegistrySnapshot({ registryDirectory }) {
     if (!isExactVersion(version ?? "")) defect(defects, "RECEIPT_PACKAGE_VERSION", { identity, actual: version ?? null });
     if (!isNpmPackageName(name ?? "") || !isExactVersion(version ?? "")) continue;
     if (receiptReleases.has(identity)) defect(defects, "DUPLICATE_RECEIPT_RELEASE", { identity });
+    if (Object.hasOwn(entry, "publication") && !validPublicationEvidence(entry.publication))
+      defect(defects, "RECEIPT_PUBLICATION_METADATA", { identity });
     receiptReleases.set(identity, entry);
     const artifact = canonicalArtifact(name, version);
     expectedArtifacts.add(artifact);
@@ -181,6 +184,20 @@ export async function verifyPackageRegistrySnapshot({ registryDirectory }) {
     receiptedArchives.push({ identity, entry, artifactPath });
   }
   const names = new Set([...receiptReleases.values()].map(({ name }) => name));
+  const requiredTimes = receipt?.publicationTimeRequired;
+  if (requiredTimes !== undefined) {
+    if (!Array.isArray(requiredTimes) ||
+        requiredTimes.some(name => typeof name !== "string" || !isNpmPackageName(name)) ||
+        JSON.stringify(requiredTimes) !== JSON.stringify([...new Set(requiredTimes)].sort())) {
+      defect(defects, "RECEIPT_PUBLICATION_TIME_REQUIREMENTS");
+    } else {
+      const required = new Set(requiredTimes);
+      for (const name of required) if (!names.has(name)) defect(defects, "PUBLICATION_TIME_REQUIRED_PACKAGE_MISSING", { name });
+      for (const [identity, entry] of receiptReleases)
+        if (required.has(entry.name) && !validPublicationEvidence(entry.publication))
+          defect(defects, "REQUIRED_PUBLICATION_TIME_MISSING", { identity });
+    }
+  }
   const scopes = [...new Set([...names].filter((name) => name.startsWith("@")).map((name) => name.slice(1, name.indexOf("/"))))].sort();
   if (receipt?.packageCount !== names.size) defect(defects, "RECEIPT_PACKAGE_COUNT", { expected: names.size, actual: receipt?.packageCount ?? null });
   if (!Array.isArray(receipt?.scopes) || JSON.stringify(receipt.scopes) !== JSON.stringify(scopes)) {
@@ -221,6 +238,12 @@ export async function verifyPackageRegistrySnapshot({ registryDirectory }) {
       defect(defects, "METADATA_VERSIONS", { name });
       continue;
     }
+    if (metadata.time !== undefined && (!metadata.time || Object.getPrototypeOf(metadata.time) !== Object.prototype)) {
+      defect(defects, "METADATA_PUBLICATION_TIMES", { name });
+    } else for (const version of Object.keys(metadata.time ?? {})) {
+      if (!Object.hasOwn(metadata.versions, version))
+        defect(defects, "UNRECEIPTED_PUBLICATION_TIME", { identity: `${name}@${version}` });
+    }
     const availableVersions = Object.keys(metadata.versions).filter((version) => isExactVersion(version));
     const expectedLatest = availableVersions.sort(versionOrder).at(-1) ?? null;
     const latest = metadata["dist-tags"]?.latest;
@@ -239,6 +262,9 @@ export async function verifyPackageRegistrySnapshot({ registryDirectory }) {
         defect(defects, "UNRECEIPTED_METADATA_RELEASE", { identity });
         continue;
       }
+      const publishedAt = metadata.time?.[version];
+      if (publishedAt !== entry.publication?.publishedAt)
+        defect(defects, "METADATA_PUBLICATION_TIME_MISMATCH", { identity });
       const expectedTarball = registry ? new URL(canonicalArtifact(name, version), registry).href : null;
       for (const field of ["tarball", "shasum", "integrity"]) {
         const expected = field === "tarball" ? expectedTarball : entry[field];
