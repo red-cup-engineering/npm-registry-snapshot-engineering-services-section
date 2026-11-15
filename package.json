@@ -1,6 +1,6 @@
 {
   "name": "@red-cup-engineering/npm-registry-snapshot-engineering-services-section",
-  "version": "0.1.4-dev.2",
+  "version": "0.1.5-dev.0",
   "type": "module",
   "description": "Holds the registry snapshot services: assembly, verification, and activation of immutable registry snapshots. Use when producing or promoting a registry snapshot.",
   "repository": {
@@ -17,8 +17,8 @@
     "check": "check-package-syntax"
   },
   "dependencies": {
-    "@red-cup-engineering/npm-registry-engineering-services-section": "0.1.3-dev.0",
-    "@red-cup-engineering/npm-registry-read-service": "0.1.3",
+    "@red-cup-engineering/npm-registry-engineering-services-section": "^0.1.3",
+    "@red-cup-engineering/npm-registry-read-service": "^0.1.5",
     "semver": "7.7.2"
   },
   "devDependencies": {

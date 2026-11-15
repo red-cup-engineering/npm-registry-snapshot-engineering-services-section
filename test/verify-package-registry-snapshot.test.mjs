@@ -258,3 +258,23 @@ test("snapshot refuses an archive whose host compatibility contradicts its measu
     });
   });
 });
+
+test("invalid receipt coordinates are diagnosed without reading a different release's bytes", async () => {
+  await withSnapshot(async (root) => {
+    const first = release({ name: "plain", version: "1.0.0", payload: "first" });
+    const second = release({ name: "plain", version: "1.0.1", payload: "second" });
+    const receipt = await writeSnapshot(root, [first, second]);
+    for (const artifact of [second.artifact, 42, { path: first.artifact }]) {
+      receipt.packages[0].artifact = artifact;
+      await writeFile(join(root, "registry-receipt.json"), JSON.stringify(receipt));
+      await assert.rejects(() => verifyPackageRegistrySnapshot({ registryDirectory: root }), error => {
+        assert.ok(error instanceof PackageRegistrySnapshotVerificationError);
+        assert.deepEqual(error.defects, [{
+          code: "RECEIPT_ARTIFACT_COORDINATES", identity: "plain@1.0.0",
+          expected: first.artifact, actual: artifact,
+        }]);
+        return true;
+      });
+    }
+  });
+});

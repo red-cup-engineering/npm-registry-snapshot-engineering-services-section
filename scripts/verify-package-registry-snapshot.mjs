@@ -162,16 +162,23 @@ export async function verifyPackageRegistrySnapshot({ registryDirectory }) {
     if (receiptReleases.has(identity)) defect(defects, "DUPLICATE_RECEIPT_RELEASE", { identity });
     receiptReleases.set(identity, entry);
     const artifact = canonicalArtifact(name, version);
-    if (entry.artifact !== artifact) defect(defects, "RECEIPT_ARTIFACT_COORDINATES", { identity, expected: artifact, actual: entry.artifact ?? null });
     expectedArtifacts.add(artifact);
-    const artifactPath = resolve(root, entry.artifact ?? "");
+    const expectedTarball = registry ? new URL(artifact, registry).href : null;
+    if (entry.tarball !== expectedTarball) defect(defects, "RECEIPT_TARBALL_URL", { identity, expected: expectedTarball, actual: entry.tarball ?? null });
+    if (entry.artifact !== artifact) {
+      defect(defects, "RECEIPT_ARTIFACT_COORDINATES", { identity, expected: artifact, actual: entry.artifact ?? null });
+      if (typeof entry.artifact === "string" && !inside(root, resolve(root, entry.artifact)))
+        defect(defects, "ARTIFACT_OUTSIDE_ROOT", { identity, artifact: entry.artifact });
+      // A malformed coordinate is a catalogue defect, not evidence that a
+      // different file's bytes disagree with this release's digest.
+      continue;
+    }
+    const artifactPath = resolve(root, artifact);
     if (!inside(root, artifactPath)) {
-      defect(defects, "ARTIFACT_OUTSIDE_ROOT", { identity, artifact: entry.artifact ?? null });
+      defect(defects, "ARTIFACT_OUTSIDE_ROOT", { identity, artifact });
       continue;
     }
     receiptedArchives.push({ identity, entry, artifactPath });
-    const expectedTarball = registry ? new URL(artifact, registry).href : null;
-    if (entry.tarball !== expectedTarball) defect(defects, "RECEIPT_TARBALL_URL", { identity, expected: expectedTarball, actual: entry.tarball ?? null });
   }
   const names = new Set([...receiptReleases.values()].map(({ name }) => name));
   const scopes = [...new Set([...names].filter((name) => name.startsWith("@")).map((name) => name.slice(1, name.indexOf("/"))))].sort();
