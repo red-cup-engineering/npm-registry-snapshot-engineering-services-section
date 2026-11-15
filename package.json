@@ -22,7 +22,7 @@
     "semver": "7.7.2"
   },
   "devDependencies": {
-    "@red-cup-engineering/jsnode-package-engineering-services-section": "0.6.1-dev.6"
+    "@red-cup-engineering/jsnode-package-engineering-services-section": "^0.6.2"
   },
   "license": "MIT",
   "funding": {
