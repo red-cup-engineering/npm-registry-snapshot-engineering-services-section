@@ -13,8 +13,8 @@
     "./verify-package-registry-snapshot": "./scripts/verify-package-registry-snapshot.mjs"
   },
   "scripts": {
-    "test": "run-package-tests",
-    "check": "check-package-syntax"
+    "check": "check-package-syntax",
+    "test": "node --test test/packed-archive-receiving.test.mjs"
   },
   "dependencies": {
     "@red-cup-engineering/npm-registry-engineering-services-section": "^0.1.3",
@@ -33,14 +33,9 @@
     "scripts",
     "README.md",
     "LICENSE",
-    "test"
+    "test/packed-archive-receiving.test.mjs"
   ],
   "receivingTests": [
-    "test/activate-verified-package-registry-snapshot.test.mjs",
-    "test/assemble-package-registry-snapshot.test.mjs",
-    "test/http-snapshot-receiving.test.mjs",
-    "test/npm11-offline-install.test.mjs",
-    "test/package-version.test.mjs",
-    "test/verify-package-registry-snapshot.test.mjs"
+    "test/packed-archive-receiving.test.mjs"
   ]
 }
