@@ -20,10 +20,10 @@ function member(name, value) {
 }
 
 /** Deterministic registry fixture, without installing, packing or extracting anything. */
-export function npmPackageFixture(manifest, payload = "") {
+export function npmPackageFixture(manifest, payload = "", { entrypointSource } = {}) {
   return gzipSync(Buffer.concat([
     member("package/package.json", JSON.stringify(manifest) + "\n"),
-    member("package/src/index.mjs", "export default " + JSON.stringify(String(payload)) + ";\n"),
+    member("package/src/index.mjs", entrypointSource ?? ("export default " + JSON.stringify(String(payload)) + ";\n")),
     Buffer.alloc(2 * BLOCK),
   ]));
 }
