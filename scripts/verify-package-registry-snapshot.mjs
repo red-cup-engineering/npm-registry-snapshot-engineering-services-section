@@ -261,7 +261,8 @@ export async function verifyPackageRegistrySnapshot({ registryDirectory }) {
       try { admitNpmPackageArchive(artifact.contents, { manifest, integrity: entry.integrity }); }
       catch (error) {
         if (!["INVALID_NPM_ARCHIVE_MANIFEST", "NPM_ARCHIVE_BOUNDS", "NPM_ARCHIVE_INTEGRITY_MISMATCH",
-          "NPM_ARCHIVE_IDENTITY_MISMATCH", "NPM_ARCHIVE_DEPENDENCY_MISMATCH", "NPM_ARCHIVE_LOCAL_PROTOCOL"].includes(error?.code)) throw error;
+          "NPM_ARCHIVE_IDENTITY_MISMATCH", "NPM_ARCHIVE_DEPENDENCY_MISMATCH", "NPM_ARCHIVE_COMPATIBILITY_MISMATCH",
+          "NPM_ARCHIVE_LOCAL_PROTOCOL"].includes(error?.code)) throw error;
         defect(defects, "ARTIFACT_MANIFEST_REFUSED", { identity, reason: error.code });
       }
     }

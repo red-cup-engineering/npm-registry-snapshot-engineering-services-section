@@ -243,3 +243,18 @@ test("independent verification refuses an archive whose checked identity contrad
     assert.deepEqual(await readdir(outputDirectory), []);
   });
 });
+
+test("snapshot refuses an archive whose host compatibility contradicts its measured catalogue row", async () => {
+  await withSnapshot(async root => {
+    const name = "@example/platform", version = "1.0.0";
+    const item = release({ name, version, archiveManifest: { name, version, os: "darwin" } });
+    item.manifest.os = ["linux"];
+    await writeSnapshot(root, [item]);
+    await assert.rejects(() => verifyPackageRegistrySnapshot({ registryDirectory: root }), error => {
+      assert.ok(error instanceof PackageRegistrySnapshotVerificationError, error.stack);
+      assert.deepEqual(error.defects, [{ code: "ARTIFACT_MANIFEST_REFUSED",
+        identity: "@example/platform@1.0.0", reason: "NPM_ARCHIVE_COMPATIBILITY_MISMATCH" }]);
+      return true;
+    });
+  });
+});
