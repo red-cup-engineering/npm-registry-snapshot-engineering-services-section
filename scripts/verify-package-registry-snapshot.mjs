@@ -2,7 +2,7 @@ import { validPublicationEvidence } from "./publication-metadata.mjs";
 import { isExactVersion, versionOrder } from "./package-version.mjs";
 import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
-import { validateNpmPackageArchive } from "@red-cup-engineering/npm-registry-engineering-services-section/admit-npm-package-archive";
+import { admitNpmPackageArchive } from "@red-cup-engineering/npm-registry-engineering-services-section/admit-npm-package-archive";
 import { verifyArtifactBytes } from "@red-cup-engineering/npm-registry-engineering-services-section/npm-artifact-integrity-service";
 
 import { isNpmPackageName } from "@red-cup-engineering/npm-registry-read-service";
@@ -130,27 +130,27 @@ export async function verifyPackageRegistrySnapshot({ registryDirectory }) {
     if (error?.code === "ENOENT") throw new TypeError("registryDirectory does not exist");
     throw error;
   }
-  let record;
-  const recordPath = join(root, "registry-receipt.json");
-  const recordFile = await readRegularFileUnderRoot(rootReal, recordPath);
-  if (recordFile.state === "missing") throw new TypeError("registry-receipt.json is required");
-  if (recordFile.state !== "regular") {
+  let receipt;
+  const receiptPath = join(root, "registry-receipt.json");
+  const receiptFile = await readRegularFileUnderRoot(rootReal, receiptPath);
+  if (receiptFile.state === "missing") throw new TypeError("registry-receipt.json is required");
+  if (receiptFile.state !== "regular") {
     defect(defects, "RECEIPT_NOT_REGULAR_UNDER_ROOT");
-    record = {};
-  } else try { record = JSON.parse(recordFile.contents); } catch (error) {
+    receipt = {};
+  } else try { receipt = JSON.parse(receiptFile.contents); } catch (error) {
     if (error instanceof SyntaxError) throw new TypeError("registry-receipt.json is not valid JSON");
     throw error;
   }
-  if (record?.type !== "SemioticVoxelPackageRegistryReceipt" || record?.version !== 2) {
-    defect(defects, "RECEIPT_SCHEMA", { actualType: record?.type ?? null, actualVersion: record?.version ?? null });
+  if (receipt?.type !== "SemioticVoxelPackageRegistryReceipt" || receipt?.version !== 2) {
+    defect(defects, "RECEIPT_SCHEMA", { actualType: receipt?.type ?? null, actualVersion: receipt?.version ?? null });
   }
-  const registry = exactUrl(record?.registry);
-  if (!registry) defect(defects, "RECEIPT_REGISTRY_URL", { actual: record?.registry ?? null });
-  if (!Array.isArray(record?.packages)) {
-    defect(defects, "RECEIPT_PACKAGES", { actual: record?.packages ?? null });
+  const registry = exactUrl(receipt?.registry);
+  if (!registry) defect(defects, "RECEIPT_REGISTRY_URL", { actual: receipt?.registry ?? null });
+  if (!Array.isArray(receipt?.packages)) {
+    defect(defects, "RECEIPT_PACKAGES", { actual: receipt?.packages ?? null });
   }
-  const entries = Array.isArray(record?.packages) ? record.packages : [];
-  const recordReleases = new Map();
+  const entries = Array.isArray(receipt?.packages) ? receipt.packages : [];
+  const receiptReleases = new Map();
   const expectedArtifacts = new Set();
   const receiptedArchives = [];
   for (const entry of entries) {
@@ -160,10 +160,10 @@ export async function verifyPackageRegistrySnapshot({ registryDirectory }) {
     if (!isNpmPackageName(name ?? "")) defect(defects, "RECEIPT_PACKAGE_NAME", { identity, actual: name ?? null });
     if (!isExactVersion(version ?? "")) defect(defects, "RECEIPT_PACKAGE_VERSION", { identity, actual: version ?? null });
     if (!isNpmPackageName(name ?? "") || !isExactVersion(version ?? "")) continue;
-    if (recordReleases.has(identity)) defect(defects, "DUPLICATE_RECEIPT_RELEASE", { identity });
+    if (receiptReleases.has(identity)) defect(defects, "DUPLICATE_RECEIPT_RELEASE", { identity });
     if (Object.hasOwn(entry, "publication") && !validPublicationEvidence(entry.publication))
       defect(defects, "RECEIPT_PUBLICATION_METADATA", { identity });
-    recordReleases.set(identity, entry);
+    receiptReleases.set(identity, entry);
     const artifact = canonicalArtifact(name, version);
     expectedArtifacts.add(artifact);
     const expectedTarball = registry ? new URL(artifact, registry).href : null;
@@ -183,8 +183,8 @@ export async function verifyPackageRegistrySnapshot({ registryDirectory }) {
     }
     receiptedArchives.push({ identity, entry, artifactPath });
   }
-  const names = new Set([...recordReleases.values()].map(({ name }) => name));
-  const requiredTimes = record?.publicationTimeRequired;
+  const names = new Set([...receiptReleases.values()].map(({ name }) => name));
+  const requiredTimes = receipt?.publicationTimeRequired;
   if (requiredTimes !== undefined) {
     if (!Array.isArray(requiredTimes) ||
         requiredTimes.some(name => typeof name !== "string" || !isNpmPackageName(name)) ||
@@ -193,15 +193,15 @@ export async function verifyPackageRegistrySnapshot({ registryDirectory }) {
     } else {
       const required = new Set(requiredTimes);
       for (const name of required) if (!names.has(name)) defect(defects, "PUBLICATION_TIME_REQUIRED_PACKAGE_MISSING", { name });
-      for (const [identity, entry] of recordReleases)
+      for (const [identity, entry] of receiptReleases)
         if (required.has(entry.name) && !validPublicationEvidence(entry.publication))
           defect(defects, "REQUIRED_PUBLICATION_TIME_MISSING", { identity });
     }
   }
   const scopes = [...new Set([...names].filter((name) => name.startsWith("@")).map((name) => name.slice(1, name.indexOf("/"))))].sort();
-  if (record?.packageCount !== names.size) defect(defects, "RECEIPT_PACKAGE_COUNT", { expected: names.size, actual: record?.packageCount ?? null });
-  if (!Array.isArray(record?.scopes) || JSON.stringify(record.scopes) !== JSON.stringify(scopes)) {
-    defect(defects, "RECEIPT_SCOPES", { expected: scopes, actual: record?.scopes ?? null });
+  if (receipt?.packageCount !== names.size) defect(defects, "RECEIPT_PACKAGE_COUNT", { expected: names.size, actual: receipt?.packageCount ?? null });
+  if (!Array.isArray(receipt?.scopes) || JSON.stringify(receipt.scopes) !== JSON.stringify(scopes)) {
+    defect(defects, "RECEIPT_SCOPES", { expected: scopes, actual: receipt?.scopes ?? null });
   }
 
   const metadataFiles = await filesBelow(join(root, "metadata"));
@@ -257,7 +257,7 @@ export async function verifyPackageRegistrySnapshot({ registryDirectory }) {
         continue;
       }
       metadataReleases.add(identity);
-      const entry = recordReleases.get(identity);
+      const entry = receiptReleases.get(identity);
       if (!entry) {
         defect(defects, "UNRECEIPTED_METADATA_RELEASE", { identity });
         continue;
@@ -291,7 +291,7 @@ export async function verifyPackageRegistrySnapshot({ registryDirectory }) {
       defect(defects, "RECEIPT_ARTIFACT_DIGEST", { identity, field, expected: entry[field] ?? null, actual: verification.measurement[field] });
     const manifest = archiveManifests.get(identity);
     if (verification.ok && manifest) {
-      try { validateNpmPackageArchive(artifact.contents, { manifest, integrity: entry.integrity }); }
+      try { admitNpmPackageArchive(artifact.contents, { manifest, integrity: entry.integrity }); }
       catch (error) {
         if (!["INVALID_NPM_ARCHIVE_MANIFEST", "NPM_ARCHIVE_BOUNDS", "NPM_ARCHIVE_INTEGRITY_MISMATCH",
           "NPM_ARCHIVE_IDENTITY_MISMATCH", "NPM_ARCHIVE_DEPENDENCY_MISMATCH", "NPM_ARCHIVE_COMPATIBILITY_MISMATCH",
@@ -300,7 +300,7 @@ export async function verifyPackageRegistrySnapshot({ registryDirectory }) {
       }
     }
   }
-  for (const identity of recordReleases.keys()) {
+  for (const identity of receiptReleases.keys()) {
     if (!metadataReleases.has(identity)) defect(defects, "RECEIPT_RELEASE_WITHOUT_METADATA", { identity });
   }
   const artifactFiles = await filesBelow(join(root, "tarballs"), "tarballs");
@@ -318,8 +318,8 @@ export async function verifyPackageRegistrySnapshot({ registryDirectory }) {
     version: 1,
     registry,
     packageCount: names.size,
-    releaseCount: recordReleases.size,
+    releaseCount: receiptReleases.size,
     scopes,
-    releases: [...recordReleases.keys()].sort(),
+    releases: [...receiptReleases.keys()].sort(),
   });
 }

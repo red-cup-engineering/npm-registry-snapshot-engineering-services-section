@@ -103,14 +103,14 @@ export async function assemblePackageRegistrySnapshot({ releases, outputDirector
   const collisions = Object.groupBy(prepared, ({ manifest }) => `${manifest.name}@${manifest.version}`);
   const duplicate = Object.keys(collisions).filter((identity) => collisions[identity].length > 1);
   if (duplicate.length) throw new Error(`duplicate package versions: ${duplicate.join(", ")}`);
-  const baseRecord = baseRegistry === null ? null : JSON.parse(await readFile(join(baseRegistry, "registry-receipt.json"), "utf8"));
-  if (baseRecord !== null && baseRecord.registry !== base.href) throw new Error("base registry receipt URL must equal registryUrl for snapshot merge");
-  const baseRequiredTimes = baseRecord?.publicationTimeRequired ?? [];
+  const baseReceipt = baseRegistry === null ? null : JSON.parse(await readFile(join(baseRegistry, "registry-receipt.json"), "utf8"));
+  if (baseReceipt !== null && baseReceipt.registry !== base.href) throw new Error("base registry receipt URL must equal registryUrl for snapshot merge");
+  const baseRequiredTimes = baseReceipt?.publicationTimeRequired ?? [];
   if (!Array.isArray(baseRequiredTimes) || baseRequiredTimes.some(name => typeof name !== "string" || !isNpmPackageName(name)))
     throw new Error("base receipt has invalid publication time requirements");
   const requiredTimes = [...new Set([...requireCompletePublicationMetadataFor, ...baseRequiredTimes])].sort();
   const staging = await mkdtemp(join(output, ".assembling-"));
-  let entries = baseRecord === null ? [] : structuredClone(baseRecord.packages ?? []);
+  let entries = baseReceipt === null ? [] : structuredClone(baseReceipt.packages ?? []);
   try {
     if (baseRegistry !== null) for (const entry of await readdir(baseRegistry)) await cp(join(baseRegistry, entry), join(staging, entry), { recursive: true, errorOnExist: true, force: false });
     for (const exclusion of excludedBaseReleases.map(releaseSelector)) entries = await excludeBaseRelease(staging, entries, exclusion);
@@ -128,30 +128,30 @@ export async function assemblePackageRegistrySnapshot({ releases, outputDirector
       const previous = entries.find(entry => entry.name === manifest.name && entry.version === manifest.version);
       if (previous?.publication && publication && !isDeepStrictEqual(previous.publication, publication))
         throw new Error(`issuer publication metadata collides with admitted evidence: ${manifest.name}@${manifest.version}`);
-      const origin = publication ?? previous?.publication;
+      const provenance = publication ?? previous?.publication;
       const versionMetadata = { ...manifest, dist: { tarball, shasum: measured.shasum, integrity: measured.integrity } };
       const metadata = { _id: manifest.name, name: manifest.name, "dist-tags": { latest: manifest.version }, versions: { ...(prior?.versions ?? {}), [manifest.version]: versionMetadata } };
       metadata["dist-tags"].latest = Object.keys(metadata.versions).sort(versionOrder).at(-1);
       const times = entries.filter(entry => entry.name === manifest.name && entry.version !== manifest.version && entry.publication)
         .map(entry => [entry.version, entry.publication.publishedAt]);
-      if (origin) times.push([manifest.version, origin.publishedAt]);
+      if (provenance) times.push([manifest.version, provenance.publishedAt]);
       if (times.length) metadata.time = Object.fromEntries(times.sort(([a], [b]) => versionOrder(a, b)));
       await mkdir(dirname(metadataPath), { recursive: true });
       await writeFile(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`);
       entries = entries.filter((entry) => entry.name !== manifest.name || entry.version !== manifest.version);
-      entries.push({ name: manifest.name, version: manifest.version, tarball, artifact, ...measured, ...(origin ? { publication: origin } : {}) });
+      entries.push({ name: manifest.name, version: manifest.version, tarball, artifact, ...measured, ...(provenance ? { publication: provenance } : {}) });
     }
     await refuseSurvivingLocalDependencyProtocol(join(staging, "metadata"));
     entries.sort((left, right) => left.name.localeCompare(right.name) || versionOrder(left.version, right.version));
     const scopes = [...new Set(entries.filter(({ name }) => name.startsWith("@")).map(({ name }) => name.slice(1, name.indexOf("/"))))].sort();
     await writeFile(join(staging, "client.npmrc"), [`registry=${base.href}`, ...scopes.map((scope) => `@${scope}:registry=${base.href}`), "audit=false", "fund=false", ""] .join("\n"));
-    const record = { type: "SemioticVoxelPackageRegistryReceipt", version: 2, registry: base.href, packages: entries,
+    const receipt = { type: "SemioticVoxelPackageRegistryReceipt", version: 2, registry: base.href, packages: entries,
       ...(requiredTimes.length ? { publicationTimeRequired: requiredTimes } : {}), packageCount: new Set(entries.map(({ name }) => name)).size, scopes, ...(compute === undefined ? {} : { compute }) };
-    await writeFile(join(staging, "registry-receipt.json"), `${JSON.stringify(record, null, 2)}\n`);
+    await writeFile(join(staging, "registry-receipt.json"), `${JSON.stringify(receipt, null, 2)}\n`);
     await verifyPackageRegistrySnapshot({ registryDirectory: staging });
     for (const entry of await readdir(staging)) await rename(join(staging, entry), join(output, entry));
     await rm(staging, { recursive: true, force: true });
-    return record;
+    return receipt;
   } catch (error) {
     await rm(staging, { recursive: true, force: true });
     throw error;
